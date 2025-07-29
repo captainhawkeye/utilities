@@ -1,0 +1,41 @@
+prometheus.exporter.unix "custom_metrics" {
+      set_collectors = ["textfile"]
+      textfile {
+          directory = "/data/metrics/"
+      }
+}
+
+discovery.relabel "custom_metrics" {
+        targets = prometheus.exporter.unix.custom_metrics.targets
+
+        rule {
+                source_labels = ["instance"]
+                regex         = "(.+).int.*"
+                target_label  = "instance"
+                replacement   = "${1}"
+        }
+
+        rule {
+                target_label = "job"
+                replacement  = "integrations/custom_metrics"
+        }
+}
+ 
+prometheus.scrape "custom_metrics" {
+    targets = discovery.relabel.custom_metrics.output
+    forward_to = [prometheus.remote_write.default.receiver]
+    job_name = "integrations/custom_metrics"
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = env("PROM_ENDPOINT")
+    tls_config {
+        insecure_skip_verify = true
+    }
+    basic_auth {
+        username = env("PROM_USER")
+        password = env("PROM_PASSWORD")
+    }
+  }
+}
